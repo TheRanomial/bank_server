@@ -2,12 +2,14 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestTransferTx(t *testing.T) {
+	
 	account1 :=	CreateRandomAccount(t)
 	account2 := CreateRandomAccount(t)
 
@@ -104,9 +106,10 @@ func TestTransferTx(t *testing.T) {
 }
 
 func TestTransferTxDeadlock(t *testing.T) {
+
 	account1 := CreateRandomAccount(t)
 	account2 := CreateRandomAccount(t)
-	
+	fmt.Println(">> before:", account1.Balance, account2.Balance)
 
 	n := 10
 	amount := int64(10)
@@ -144,6 +147,7 @@ func TestTransferTxDeadlock(t *testing.T) {
 	updatedAccount2, err := testStore.GetAccount(context.Background(), account2.ID)
 	require.NoError(t, err)
 
+	fmt.Println(">> after:", updatedAccount1.Balance, updatedAccount2.Balance)
 	require.Equal(t, account1.Balance, updatedAccount1.Balance)
 	require.Equal(t, account2.Balance, updatedAccount2.Balance)
 }

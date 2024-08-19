@@ -8,22 +8,38 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//we place queries in store to extend functionalities like transactions
-type Store struct {
+type Store interface {
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAccount(ctx context.Context, id int64) error
+	GetAccount(ctx context.Context, id int64) (Account, error)
+	GetAccountForUpdate(ctx context.Context, id int64) (Account, error)
+	GetEntry(ctx context.Context, id int64) (Entry, error)
+	GetTransfer(ctx context.Context, id int64) (Transfer, error)
+	GetUser(ctx context.Context, username string) (User, error)
+	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]Account, error)
+	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
+	ListTransfers(ctx context.Context, arg ListTransfersParams) ([]Transfer, error)
+	UpdateAccount(ctx context.Context, arg UpdateAccountParams) error
+	UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Account, error)
+	TransferTx(ctx context.Context,arg TransferTxParams) (TransferTxResult,error)
+}
+
+type SQLStore struct {
 	*Queries
 	db *pgxpool.Pool
 }
 
-//this creates a new store 
-func NewStore(db *pgxpool.Pool) *Store{
-	return &Store{
+func NewStore(db *pgxpool.Pool) Store{
+	return &SQLStore{
 		db:db,
 		Queries: New(db),
 	}
 }
 
-//execTx
-func (s *Store) ExecTx(ctx context.Context,fn func(*Queries) error) error {
+func (s *SQLStore) ExecTx(ctx context.Context,fn func(*Queries) error) error {
 	tx,err:=s.db.BeginTx(ctx,pgx.TxOptions{})
 
 	if err!=nil {
@@ -56,11 +72,21 @@ type TransferTxResult struct {
 	ToEntry		  Entry
 }
 
-func (store *Store) TransferTx(ctx context.Context,arg TransferTxParams) (TransferTxResult,error){
+func (store *SQLStore) TransferTx(ctx context.Context,arg TransferTxParams) (TransferTxResult,error){
 	var result TransferTxResult
 
 	err:=store.ExecTx(ctx,func (q *Queries)error {
 		var err error
+
+		fromAccount, err := q.GetAccount(ctx, arg.FromAccountID)
+		if err != nil {
+			return err
+		}
+
+		if fromAccount.Balance < arg.Amount {
+			return fmt.Errorf("insufficient balance in account %d", arg.FromAccountID)
+		}
+
 		result.Transfer,err=q.CreateTransfer(ctx,CreateTransferParams{
 			FromAccountID: arg.FromAccountID,
 			ToAccountID: arg.ToAccountID,
@@ -81,7 +107,7 @@ func (store *Store) TransferTx(ctx context.Context,arg TransferTxParams) (Transf
 
 		result.ToEntry,err=q.CreateEntry(ctx,CreateEntryParams{
 			AccountID: arg.ToAccountID,
-			Amount: arg.Amount,
+			Amount:arg.Amount,
 		})
 		if err!=nil{
 			return err
@@ -123,3 +149,4 @@ func (store *Store) TransferTx(ctx context.Context,arg TransferTxParams) (Transf
 	})
 	return result,err
 }
+
