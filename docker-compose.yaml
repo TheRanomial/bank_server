@@ -8,6 +8,8 @@ services:
       - POSTGRES_DB=simple_bank
     ports:
       - "5432:5432"
+  redis:
+    image: redis
   api:
     build:
       context: .
@@ -16,8 +18,10 @@ services:
       - "8080:8080"
     environment:
       - DB_SOURCE=postgresql://root:secret@postgres:5432/simple_bank?sslmode=disable
+      - REDIS_ADDRESS=redis:6379
     depends_on:
       - postgres
+      - redis
     entrypoint:
       [
         "/app/wait-for.sh",
